@@ -1,7 +1,7 @@
 {
   "name": "juu",
   "description": "Starter template for electron apps with: Vite | TanStack Router+Query | tRPC | TailwindCSS | Better-sqlite3 | Drizzle",
-  "version": "0.0.1",
+  "version": "1.0.1",
   "author": {
     "email": "rainioriku@gmail.com",
     "name": "Riku Rainio",
