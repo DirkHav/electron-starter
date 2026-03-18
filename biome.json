@@ -1,0 +1,27 @@
+{
+  "$schema": "https://biomejs.dev/schemas/1.6.1/schema.json",
+  "organizeImports": {
+    "enabled": false
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      "style": {
+        "noUselessElse": "warn",
+        "noNonNullAssertion": "warn"
+      }
+    },
+    "ignore": ["src/web/routeTree.gen.ts"]
+  },
+  "formatter": {
+    "enabled": true,
+    "formatWithErrors": true,
+    "lineWidth": 80,
+    "attributePosition": "auto",
+    "lineEnding": "crlf",
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "ignore": ["src/web/routeTree.gen.ts"]
+  }
+}

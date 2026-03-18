@@ -1,0 +1,105 @@
+{
+  "name": "juu",
+  "description": "Starter template for electron apps with: Vite | TanStack Router+Query | tRPC | TailwindCSS | Better-sqlite3 | Drizzle",
+  "version": "0.0.1",
+  "author": {
+    "email": "rainioriku@gmail.com",
+    "name": "Riku Rainio",
+    "url": "https://github.com/rikurainio"
+  },
+  "repository": {
+    "url": "https://github.com/rikurainio/Juu"
+  },
+  "main": "dist/main/main.js",
+  "scripts": {
+    "start": "electron-vite preview",
+    "dev": "electron-vite dev --watch",
+    "makeroutes": "npx tsr generate",
+    "prebuild": "electron-vite build",
+    "build": "pnpm run prebuild && pnpm run makeroutes && electron-builder",
+    "db:push": "drizzle-kit push",
+    "db:generate": "drizzle-kit generate",
+    "rebuild:electron" :".\\node_modules\\.bin\\electron-rebuild.cmd -f",
+    "rebuild": "npm rebuild",
+    "format": "npx @biomejs/biome format ./src",
+    "lint": "npx @biomejs/biome lint ./src",
+    "check": "npx @biomejs/biome check --apply ./src"
+  },
+  "build": {
+    "appId": "com.juu.app",
+    "productName": "juu.template",
+    "buildDependenciesFromSource": true,
+    "icon": "assets/icon.png",
+    "files": [
+      "dist/**/*"
+    ],
+    "directories": {
+      "output": "release/${version}"
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "dependencies": {
+    "@phosphor-icons/react": "^2.0.15",
+    "@tanstack/react-query": "^4.0.0",
+    "@tanstack/react-router": "^1.12.12",
+    "@tanstack/router-cli": "^1.19.2",
+    "@trpc/client": "^10.44.1",
+    "@trpc/react-query": "^10.44.1",
+    "@trpc/server": "^10.44.1",
+    "better-sqlite3": "9.2.2",
+    "clsx": "^2.1.0",
+    "drizzle-kit": "^0.21.4",
+    "drizzle-orm": "^0.29.1",
+    "electron-trpc": "^0.5.2",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "sort-by": "^1.2.0",
+    "tailwind-merge": "^2.2.1",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "1.6.1",
+    "@electron/rebuild": "^3.6.0",
+    "@tanstack/router-devtools": "^1.12.13",
+    "@tanstack/router-vite-plugin": "^1.12.8",
+    "@types/better-sqlite3": "^7.6.8",
+    "@types/node": "^20.10.3",
+    "@types/react": "^18.2.42",
+    "@types/react-dom": "^18.2.17",
+    "@vitejs/plugin-react": "^4.2.1",
+    "autoprefixer": "^10.4.18",
+    "concurrently": "^8.2.2",
+    "electron": "^28.2.7",
+    "electron-builder": "^24.9.1",
+    "electron-vite": "^2.0.0",
+    "postcss": "^8.4.35",
+    "tailwindcss": "^3.4.1",
+    "typescript": "^5.3.2",
+    "vite": "^5.0.12"
+  }
+}
