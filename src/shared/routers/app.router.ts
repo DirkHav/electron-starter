@@ -1,5 +1,6 @@
 import pkg from "../../../package.json";
 import { publicProcedure, router } from "@src/trpc";
+import { projectRouter } from "./project.router";
 import { windowRouter } from "./window.router";
 import { userRouter } from "./user.router";
 import { shell } from "electron";
@@ -7,6 +8,7 @@ import { shell } from "electron";
 export const appRouter = router({
   window: windowRouter,
   user: userRouter,
+  project: projectRouter,
   version: publicProcedure.query(async () => {
     return pkg.version;
   }),
