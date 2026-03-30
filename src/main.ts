@@ -4,14 +4,17 @@ import { createContext } from "@src/shared/context";
 import { createIPCHandler } from "electron-trpc/main";
 import { BrowserWindow, app } from "electron";
 
-// set the app name independent of package.json name
-app.setName("juu");
+// Set the app name independent of package.json name.
+app.setName("Electron Projects");
 
 const createWindow = () => {
   const mainWindow = new BrowserWindow({
-    frame: false, // Set to true if you want to use the default frame
+    show: false,
+    frame: false,
     width: 1280,
     height: 720,
+    minWidth: 960,
+    minHeight: 640,
     webPreferences: {
       devTools: true,
       sandbox: false,
@@ -30,7 +33,7 @@ const createWindow = () => {
   });
 
   mainWindow.webContents.on("dom-ready", () => {
-    mainWindow.show;
+    mainWindow.show();
   });
 
   if (import.meta.env.DEV) {

@@ -1,84 +1,38 @@
 import React from "react";
-import type { Theme } from "../lib/types";
 import { Minus, Square, X } from "@phosphor-icons/react";
-import { Link, useRouter } from "@tanstack/react-router";
-import { useTheme } from "./providers";
-import { THEMES } from "../lib/constants";
+import { useRouter } from "@tanstack/react-router";
 import t from "@shared/config";
 
 type LayoutProps = {
   children?: React.ReactNode;
 };
 
-interface SideNavProps extends React.HTMLAttributes<HTMLDivElement> {}
 interface TopBarProps extends React.HTMLAttributes<HTMLDivElement> {}
-
-const SideNav = ({ className, ...props }: SideNavProps) => {
-  return (
-    <div {...props} className="px-3 pt-2 flex flex-col gap-3">
-      <Link to="/" className="[&.active]:font-bold">
-        Home
-      </Link>
-      <Link to="/example" className="[&.active]:font-bold">
-        Example
-      </Link>
-    </div>
-  );
-};
 
 const TopBar = ({ className, ...props }: TopBarProps) => {
   const { data: appVer } = t.version.useQuery();
   const { mutate: minimizeWindow } = t.window.minimize.useMutation();
   const { mutate: maximizeWindow } = t.window.maximize.useMutation();
   const { mutate: closeWindow } = t.window.closeWindow.useMutation();
-  const { theme, setTheme } = useTheme();
 
   return (
-    <div {...props} className="flex w-full h-10 items-center">
-      <div id="drag-region" className="flex items-center px-3 w-full">
-        <span className="font-bold">
-          Juu <span className="font-extralight text-sm">{appVer}</span>
-        </span>
-      </div>
-      <div className="flex mr-2">
-        <div className="flex items-center bg-card rounded-md pl-2 hover:bg-bgHover px-1 mr-2">
-          <svg
-            className="w-5 h-5"
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 256 256"
-          >
-            <title>theme</title>
-            <path d="M200.77,53.89A103.27,103.27,0,0,0,128,24h-1.07A104,104,0,0,0,24,128c0,43,26.58,79.06,69.36,94.17A32,32,0,0,0,136,192a16,16,0,0,1,16-16h46.21a31.81,31.81,0,0,0,31.2-24.88,104.43,104.43,0,0,0,2.59-24A103.28,103.28,0,0,0,200.77,53.89Zm13,93.71A15.89,15.89,0,0,1,198.21,160H152a32,32,0,0,0-32,32,16,16,0,0,1-21.31,15.07C62.49,194.3,40,164,40,128a88,88,0,0,1,87.09-88h.9a88.35,88.35,0,0,1,88,87.25A88.86,88.86,0,0,1,213.81,147.6ZM140,76a12,12,0,1,1-12-12A12,12,0,0,1,140,76ZM96,100A12,12,0,1,1,84,88,12,12,0,0,1,96,100Zm0,56a12,12,0,1,1-12-12A12,12,0,0,1,96,156Zm88-56a12,12,0,1,1-12-12A12,12,0,0,1,184,100Z" />
-          </svg>
-          <select
-            defaultValue={theme}
-            className="bg-transparent outline-none flex items-center gap-[.1rem] px-2 py-1 truncate"
-            onChange={(e) => setTheme(e.target.value as Theme)}
-          >
-            {THEMES.map((t: Theme) => (
-              <option className="bg-card" key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
+    <div {...props} className="app-topbar">
+      <div id="drag-region" className="app-topbar__drag">
+        <div>
+          <span className="app-topbar__title">Electron Projects</span>
+          <span className="app-topbar__version">v{appVer}</span>
         </div>
-        <button
-          type="button"
-          className="px-2 py-1 rounded-md hover:bg-bgHover"
-          onClick={() => minimizeWindow()}
-        >
+      </div>
+      <div className="window-controls">
+        <button type="button" className="window-control" onClick={() => minimizeWindow()}>
           <Minus />
         </button>
-        <button
-          type="button"
-          className="px-2 py-1 rounded-md hover:bg-bgHover"
-          onClick={() => maximizeWindow()}
-        >
+        <button type="button" className="window-control" onClick={() => maximizeWindow()}>
           <Square />
         </button>
         <button
           type="button"
-          className="px-2 py-1 rounded-md hover:bg-bgHover hover:outline-rose-600 hover:outline hover:outline-1"
+          className="window-control window-control--close"
           onClick={() => closeWindow()}
         >
           <X />
@@ -90,9 +44,8 @@ const TopBar = ({ className, ...props }: TopBarProps) => {
 
 export default function Layout({ children }: LayoutProps) {
   const router = useRouter();
+
   React.useEffect(() => {
-    /** Navigate to default route on first launch (production) 
-    TODO: Find a better solution than this... */
     if (
       router.state.location.pathname.toString().includes("renderer/index.html")
     ) {
@@ -101,17 +54,9 @@ export default function Layout({ children }: LayoutProps) {
   }, [router.navigate, router.state.location.pathname]);
 
   return (
-    /** Using a custom layout is not a must. You can also disable the custom topbar
-     *  and enable "frame" property for the window in main.ts */
-    <div className="grid grid-cols-1 w-full h-screen">
-      <TopBar className="h-[5vh]" />
-
-      <div className="grid grid-cols-12 w-full h-[95vh]">
-        <SideNav className="col-span-1" />
-        <div className="col-span-11 overflow-y-scroll w-full p-3 rounded-t-lg bg-background">
-          {children}
-        </div>
-      </div>
+    <div className="app-shell">
+      <TopBar />
+      <main className="app-content">{children}</main>
     </div>
   );
 }

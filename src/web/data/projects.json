@@ -1,0 +1,109 @@
+{
+  "projects": [
+    {
+      "id": "desktop-client",
+      "name": "Desktop Client",
+      "location": "C:/workspace/desktop-client",
+      "description": "Interne Electron-tooling voor het beheren van lokale workflows.",
+      "files": [
+        {
+          "id": "package-json",
+          "name": "package.json",
+          "path": "package.json",
+          "type": "JSON",
+          "size": "1.2 KB",
+          "updatedAt": "2026-03-28 09:14",
+          "content": "{\n  \"name\": \"desktop-client\",\n  \"version\": \"0.1.0\",\n  \"main\": \"src/main.js\"\n}"
+        },
+        {
+          "id": "main-js",
+          "name": "main.js",
+          "path": "src/main.js",
+          "type": "JavaScript",
+          "size": "3.8 KB",
+          "updatedAt": "2026-03-27 17:42",
+          "content": "const { app, BrowserWindow } = require('electron');\n\nfunction createWindow() {\n  const win = new BrowserWindow({ width: 1280, height: 800 });\n  win.loadFile('index.html');\n}\n\napp.whenReady().then(createWindow);"
+        },
+        {
+          "id": "styles-css",
+          "name": "styles.css",
+          "path": "src/styles.css",
+          "type": "CSS",
+          "size": "2.1 KB",
+          "updatedAt": "2026-03-26 14:03",
+          "content": "body {\n  margin: 0;\n  font-family: 'Segoe UI', sans-serif;\n  background: #f4f1ea;\n  color: #1d1d1d;\n}"
+        }
+      ]
+    },
+    {
+      "id": "marketing-site",
+      "name": "Marketing Site",
+      "location": "C:/workspace/marketing-site",
+      "description": "Landing pages en contentblokken voor productlanceringen.",
+      "files": [
+        {
+          "id": "home-html",
+          "name": "home.html",
+          "path": "public/home.html",
+          "type": "HTML",
+          "size": "5.6 KB",
+          "updatedAt": "2026-03-25 11:19",
+          "content": "<section class=\"hero\">\n  <h1>Build faster</h1>\n  <p>Ship polished desktop experiences.</p>\n</section>"
+        },
+        {
+          "id": "tokens-css",
+          "name": "tokens.css",
+          "path": "src/styles/tokens.css",
+          "type": "CSS",
+          "size": "1.4 KB",
+          "updatedAt": "2026-03-24 15:08",
+          "content": ":root {\n  --sand: #efe6d8;\n  --ink: #1e1a16;\n  --accent: #c46a3d;\n}"
+        },
+        {
+          "id": "content-md",
+          "name": "launch-notes.md",
+          "path": "content/launch-notes.md",
+          "type": "Markdown",
+          "size": "900 B",
+          "updatedAt": "2026-03-23 08:47",
+          "content": "# Launch notes\n\n- Hero copy bijgewerkt\n- CTA doorverwijst nu naar pricing\n- Footer links opgeschoond"
+        }
+      ]
+    },
+    {
+      "id": "design-system",
+      "name": "Design System",
+      "location": "C:/workspace/design-system",
+      "description": "Component library met tokens, documentatie en examples.",
+      "files": [
+        {
+          "id": "button-tsx",
+          "name": "Button.tsx",
+          "path": "src/components/Button.tsx",
+          "type": "TypeScript",
+          "size": "2.7 KB",
+          "updatedAt": "2026-03-22 16:33",
+          "content": "export function Button({ children }) {\n  return <button className=\"button\">{children}</button>;\n}"
+        },
+        {
+          "id": "stories-tsx",
+          "name": "Button.stories.tsx",
+          "path": "src/stories/Button.stories.tsx",
+          "type": "Storybook",
+          "size": "1.1 KB",
+          "updatedAt": "2026-03-21 13:56",
+          "content": "import { Button } from '../components/Button';\n\nexport default { title: 'Components/Button', component: Button };"
+        },
+        {
+          "id": "readme-md",
+          "name": "README.md",
+          "path": "README.md",
+          "type": "Markdown",
+          "size": "2.9 KB",
+          "updatedAt": "2026-03-20 10:22",
+          "content": "# Design System\n\nGedeelde componenten en ontwerpregels voor interne apps."
+        }
+      ]
+    }
+  ]
+}

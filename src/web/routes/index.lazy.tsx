@@ -1,109 +1,154 @@
-import React from "react";
-import { FloppyDisk, PencilSimple, X } from "@phosphor-icons/react";
 import { createLazyFileRoute } from "@tanstack/react-router";
-import t from "@src/shared/config";
+import React from "react";
+import projectData from "../data/projects.json";
 
 export const Route = createLazyFileRoute("/" as never)({
   component: Index,
 });
 
 function Index() {
-  const [newName, setNewName] = React.useState<string>();
-  const [editableUser, setEditableUser] = React.useState<number | undefined>(
-    undefined,
+  const projects = projectData.projects;
+  const [selectedProjectId, setSelectedProjectId] = React.useState(
+    projects[0]?.id ?? "",
+  );
+  const selectedProject =
+    projects.find((project) => project.id === selectedProjectId) ?? projects[0];
+  const [selectedFileId, setSelectedFileId] = React.useState(
+    selectedProject?.files[0]?.id ?? "",
   );
 
-  const { mutate: createUser } = t.user.create.useMutation({
-    onSuccess: () => utils.user.invalidate(),
-  });
-  const { mutate: deleteUsers } = t.user.deleteAll.useMutation({
-    onSuccess: () => utils.user.invalidate(),
-  });
-  const { mutate: deleteUser } = t.user.delete.useMutation({
-    onSuccess: () => utils.user.invalidate(),
-  });
-  const { mutate: updateUser } = t.user.update.useMutation({
-    onSuccess: () => utils.user.invalidate(),
-  });
-  const { data: users } = t.user.getAll.useQuery();
-  const utils = t.useUtils();
+  React.useEffect(() => {
+    if (!selectedProject) {
+      return;
+    }
+
+    setSelectedFileId((currentFileId) => {
+      const fileStillExists = selectedProject.files.some(
+        (file) => file.id === currentFileId,
+      );
+      return fileStillExists ? currentFileId : (selectedProject.files[0]?.id ?? "");
+    });
+  }, [selectedProject]);
+
+  const selectedFile = selectedProject?.files.find(
+    (file) => file.id === selectedFileId,
+  );
 
   return (
-    <div className="">
-      <p className="mb-1 font-semibold text-2xl">db example:</p>
-      <div>
-        <div className="flex gap-2 items-center">
-          <button
-            type="button"
-            onClick={() => createUser({ name: "test" })}
-            className="bg-card px-3 py-1 rounded border border-stone-700 hover:brightness-110"
-          >
-            add user
-          </button>
-          <button
-            type="button"
-            onClick={() => deleteUsers()}
-            className="bg-card px-3 py-1 rounded border border-stone-700 hover:brightness-110"
-          >
-            delete users
-          </button>
+    <div className="project-browser">
+      <aside className="project-sidebar">
+        <div className="panel-heading">
+          <span className="eyebrow">Projects</span>
+          <h1>Workspace</h1>
+          <p>Kies een project om de bijbehorende bestanden te bekijken.</p>
         </div>
-        <div className="flex flex-wrap mt-3 gap-3">
-          {users?.map((u) => (
-            <div
-              key={u.id}
-              className="flex max-w-xs items-center gap-3 bg-card border border-border rounded px-1 py-[0.1rem]"
-            >
-              <div className="w-full">
-                <p className="w-20 truncate">
-                  <span className="text-xs pr-1">{u.id}</span>
-                  {u.name}
-                </p>
-              </div>
-              <div className="flex gap-1">
-                <button
-                  type="button"
-                  onClick={() => setEditableUser(u.id)}
-                  className="border bg-background border-border rounded flex items-center h-5"
-                >
-                  <PencilSimple />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => deleteUser({ id: u.id })}
-                  className="border bg-background border-border rounded text-rose-500 flex items-center h-5"
-                >
-                  <X />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-        {editableUser && (
-          <div className="fixed inset-0 w-full h-screen flex flex-col items-center justify-center bg-black backdrop-blur bg-opacity-10">
-            <div className="flex gap-2 items-center">
-              <input
-                className="bg-background border border-border outline-none text-text px-1 rounded placeholder-text"
-                placeholder={`new name for user id: ${editableUser}`}
-                onChange={(e) => setNewName(e.target.value)}
-              />
+
+        <div className="project-list">
+          {projects.map((project) => {
+            const isActive = project.id === selectedProject?.id;
+
+            return (
               <button
+                key={project.id}
                 type="button"
-                onClick={() => {
-                  updateUser({
-                    id: editableUser,
-                    newName: newName as string,
-                  });
-                  setEditableUser(undefined);
-                }}
-                className="border bg-background border-border rounded flex items-center h-5"
+                className={`project-card ${isActive ? "active" : ""}`}
+                onClick={() => setSelectedProjectId(project.id)}
               >
-                <FloppyDisk />
+                <span className="project-card__name">{project.name}</span>
+                <span className="project-card__meta">{project.location}</span>
+                <span className="project-card__count">
+                  {project.files.length} bestanden
+                </span>
               </button>
+            );
+          })}
+        </div>
+      </aside>
+
+      <section className="project-content">
+        {selectedProject ? (
+          <>
+            <header className="project-header">
+              <div>
+                <span className="eyebrow">Selected project</span>
+                <h2>{selectedProject.name}</h2>
+                <p>{selectedProject.description}</p>
+              </div>
+              <div className="project-badge">{selectedProject.location}</div>
+            </header>
+
+            <div className="content-grid">
+              <div className="file-panel">
+                <div className="panel-heading">
+                  <span className="eyebrow">Files</span>
+                  <h3>Bestandsoverzicht</h3>
+                </div>
+
+                <div className="file-list">
+                  {selectedProject.files.map((file) => {
+                    const isActive = file.id === selectedFile?.id;
+
+                    return (
+                      <button
+                        key={file.id}
+                        type="button"
+                        className={`file-row ${isActive ? "active" : ""}`}
+                        onClick={() => setSelectedFileId(file.id)}
+                      >
+                        <span className="file-row__name">{file.name}</span>
+                        <span className="file-row__meta">
+                          {file.path} | {file.size}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="details-panel">
+                {selectedFile ? (
+                  <>
+                    <div className="panel-heading">
+                      <span className="eyebrow">Preview</span>
+                      <h3>{selectedFile.name}</h3>
+                      <p>{selectedFile.path}</p>
+                    </div>
+
+                    <div className="file-stats">
+                      <div className="stat-card">
+                        <span className="stat-card__label">Type</span>
+                        <strong>{selectedFile.type}</strong>
+                      </div>
+                      <div className="stat-card">
+                        <span className="stat-card__label">Size</span>
+                        <strong>{selectedFile.size}</strong>
+                      </div>
+                      <div className="stat-card">
+                        <span className="stat-card__label">Updated</span>
+                        <strong>{selectedFile.updatedAt}</strong>
+                      </div>
+                    </div>
+
+                    <pre className="file-preview">
+                      <code>{selectedFile.content}</code>
+                    </pre>
+                  </>
+                ) : (
+                  <div className="empty-state">
+                    <h3>Geen bestand geselecteerd</h3>
+                    <p>Kies links een bestand om details te zien.</p>
+                  </div>
+                )}
+              </div>
             </div>
+          </>
+        ) : (
+          <div className="empty-state">
+            <h2>Geen projecten geladen</h2>
+            <p>Voeg projecten toe aan `src/web/data/projects.json`.</p>
           </div>
         )}
-      </div>
+      </section>
     </div>
   );
 }
