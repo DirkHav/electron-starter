@@ -1,8 +1,53 @@
 import { createLazyFileRoute } from "@tanstack/react-router";
 import React from "react";
 import t from "@src/shared/config";
+import type { ProjectFile, StoredProjectFile } from "@src/shared/project-store";
 
 const LAST_PROJECT_STORAGE_KEY = "electron-projects:last-opened-project";
+
+type DisplayFile = {
+  id: string;
+  name: string;
+  path: string;
+  type: string;
+  size: string;
+  updatedAt: string;
+  content: string;
+  isLinkedFile: boolean;
+};
+
+function getFileNameFromPath(path: string) {
+  const pathParts = path.split(/[/\\]/);
+  return pathParts[pathParts.length - 1] || path;
+}
+
+function normalizeFile(file: StoredProjectFile): DisplayFile {
+  if (typeof file === "string") {
+    return {
+      id: `linked-${file}`,
+      name: getFileNameFromPath(file),
+      path: file,
+      type: "Linked file",
+      size: "-",
+      updatedAt: "-",
+      content: "Bestand is gekoppeld via absoluut pad. De inhoud is niet gekopieerd naar de app.",
+      isLinkedFile: true,
+    };
+  }
+
+  const projectFile = file as ProjectFile;
+
+  return {
+    id: projectFile.id,
+    name: projectFile.name,
+    path: projectFile.path,
+    type: projectFile.type,
+    size: projectFile.size,
+    updatedAt: projectFile.updatedAt,
+    content: projectFile.content,
+    isLinkedFile: false,
+  };
+}
 
 export const Route = createLazyFileRoute("/" as never)({
   component: Index,
@@ -20,10 +65,17 @@ function Index() {
       onSuccess: async (newProject) => {
         await utils.project.getAll.invalidate();
         setSelectedProjectId(newProject.id);
-        setSelectedFileId(newProject.files[0]?.id ?? "");
+        setSelectedFileId(normalizeFile(newProject.files[0]).id);
         setIsCreateModalOpen(false);
         setNewProjectName("");
         setCreateError("");
+      },
+    });
+
+  const { mutateAsync: addFiles, isLoading: isAddingFiles } =
+    t.project.addFiles.useMutation({
+      onSuccess: async () => {
+        await utils.project.getAll.invalidate();
       },
     });
 
@@ -57,10 +109,7 @@ function Index() {
       return;
     }
 
-    window.localStorage.setItem(
-      LAST_PROJECT_STORAGE_KEY,
-      selectedProjectId,
-    );
+    window.localStorage.setItem(LAST_PROJECT_STORAGE_KEY, selectedProjectId);
   }, [selectedProjectId]);
 
   React.useEffect(() => {
@@ -68,15 +117,23 @@ function Index() {
       return;
     }
 
+    const normalizedFiles = selectedProject.files.map((file) =>
+      normalizeFile(file),
+    );
+
     setSelectedFileId((currentFileId) => {
-      const fileStillExists = selectedProject.files.some(
+      const fileStillExists = normalizedFiles.some(
         (file) => file.id === currentFileId,
       );
-      return fileStillExists ? currentFileId : (selectedProject.files[0]?.id ?? "");
+      return fileStillExists ? currentFileId : (normalizedFiles[0]?.id ?? "");
     });
   }, [selectedProject]);
 
-  const selectedFile = selectedProject?.files.find(
+  const displayedFiles = (selectedProject?.files ?? []).map((file) =>
+    normalizeFile(file),
+  );
+
+  const selectedFile = displayedFiles.find(
     (file) => file.id === selectedFileId,
   );
 
@@ -94,8 +151,24 @@ function Index() {
       });
     } catch (error) {
       setCreateError(
-        error instanceof Error ? error.message : "Could not create the project.",
+        error instanceof Error
+          ? error.message
+          : "Could not create the project.",
       );
+    }
+  };
+
+  const handleAddFiles = async () => {
+    if (!selectedProject?.id) {
+      window.alert("Selecteer eerst een project.");
+      return;
+    }
+
+    try {
+      await addFiles({ projectId: selectedProject.id });
+    } catch (error) {
+      console.error("Kon geen bestanden toevoegen", error);
+      window.alert("Kon geen bestanden toevoegen. Check console voor details.");
     }
   };
 
@@ -151,7 +224,19 @@ function Index() {
                   <h2>{selectedProject.name}</h2>
                   <p>{selectedProject.description}</p>
                 </div>
-                <div className="project-badge">{selectedProject.location}</div>
+                <div>
+                  <button
+                    type="button"
+                    className="primary-button add-file-button"
+                    onClick={handleAddFiles}
+                    disabled={isAddingFiles}
+                  >
+                    {isAddingFiles ? "Opening..." : "Add File"}
+                  </button>
+                  <div className="project-badge">
+                    {selectedProject.location}
+                  </div>
+                </div>
               </header>
 
               <div className="content-grid">
@@ -162,7 +247,7 @@ function Index() {
                   </div>
 
                   <div className="file-list">
-                    {selectedProject.files.map((file) => {
+                    {displayedFiles.map((file) => {
                       const isActive = file.id === selectedFile?.id;
 
                       return (
@@ -209,6 +294,12 @@ function Index() {
                       <pre className="file-preview">
                         <code>{selectedFile.content}</code>
                       </pre>
+                      {selectedFile.isLinkedFile ? (
+                        <p className="linked-file-note">
+                          Dit bestand is toegevoegd via de native file picker. In
+                          `projects.json` wordt alleen het absolute pad opgeslagen.
+                        </p>
+                      ) : null}
                     </>
                   ) : (
                     <div className="empty-state">
@@ -222,7 +313,10 @@ function Index() {
           ) : (
             <div className="empty-state">
               <h2>Geen projecten geladen</h2>
-              <p>Voeg projecten toe via de `+` knop of in `src/web/data/projects.json`.</p>
+              <p>
+                Voeg projecten toe via de `+` knop of in
+                `src/web/data/projects.json`.
+              </p>
             </div>
           )}
         </section>

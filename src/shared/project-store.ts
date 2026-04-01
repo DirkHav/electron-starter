@@ -13,12 +13,14 @@ export type ProjectFile = {
   content: string;
 };
 
+export type StoredProjectFile = ProjectFile | string;
+
 export type Project = {
   id: string;
   name: string;
   location: string;
   description: string;
-  files: ProjectFile[];
+  files: StoredProjectFile[];
 };
 
 type ProjectData = {
@@ -42,7 +44,11 @@ export async function readProjectsFile(): Promise<ProjectData> {
 }
 
 export async function writeProjectsFile(data: ProjectData) {
-  await writeFile(projectsFilePath, `${JSON.stringify(data, null, 2)}\n`, "utf-8");
+  await writeFile(
+    projectsFilePath,
+    `${JSON.stringify(data, null, 2)}\n`,
+    "utf-8",
+  );
 }
 
 export function createProjectId(projectName: string) {

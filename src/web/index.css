@@ -462,6 +462,17 @@ code {
   color: #3c2c20;
 }
 
+.add-file-button {
+  margin-bottom: 12px;
+}
+
+.linked-file-note {
+  margin: 12px 0 0;
+  color: rgba(36, 28, 23, 0.68);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 @media (max-width: 980px) {
   .project-browser,
   .content-grid,

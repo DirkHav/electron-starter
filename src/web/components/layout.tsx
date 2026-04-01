@@ -24,10 +24,18 @@ const TopBar = ({ className, ...props }: TopBarProps) => {
         </div>
       </div>
       <div className="window-controls">
-        <button type="button" className="window-control" onClick={() => minimizeWindow()}>
+        <button
+          type="button"
+          className="window-control"
+          onClick={() => minimizeWindow()}
+        >
           <Minus />
         </button>
-        <button type="button" className="window-control" onClick={() => maximizeWindow()}>
+        <button
+          type="button"
+          className="window-control"
+          onClick={() => maximizeWindow()}
+        >
           <Square />
         </button>
         <button
