@@ -516,29 +516,14 @@ export const projectRouter = router({
         name: input.name,
         location: `C:/workspace/${finalId}`,
         description: "Nieuw project, aangemaakt vanuit de sidebar.",
-        fileGroups: {
-          "README.md": "General",
-        },
         lastOpenedAt: formatTimestamp(),
         lastOpenedFilePaths: [],
         activeFilePath: undefined,
-        files: [
-          {
-            id: `${finalId}-readme`,
-            name: "README.md",
-            path: "README.md",
-            type: "Markdown",
-            size: "120 B",
-            updatedAt: formatTimestamp(),
-            content: `# ${input.name}\n\nNieuw project aangemaakt vanuit de Electron app.`,
-          },
-        ],
+        files: [],
       };
 
       data.projects.push(newProject);
       setLastSelectedProject(data, newProject.id);
-      setProjectOpenedFiles(newProject, [newProject.files[0].path]);
-      setProjectActiveFile(newProject, newProject.files[0].path);
       await writeProjectsFile(data);
 
       return newProject;

@@ -224,7 +224,7 @@ function Index() {
       onSuccess: async (newProject) => {
         await utils.project.getAll.invalidate();
         setSelectedProjectId(newProject.id);
-        setSelectedFileId(normalizeFile(newProject.files[0]).id);
+        setSelectedFileId("");
         setIsCreateModalOpen(false);
         setNewProjectName("");
         setCreateError("");
@@ -825,12 +825,72 @@ function Index() {
       return;
     }
 
+    const shouldRemove = window.confirm(
+      "Are you sure you want to remove this file from the project?",
+    );
+
+    if (!shouldRemove) {
+      return;
+    }
+
+    const previousProjects = utils.project.getAll.getData();
+    const nextSelectedFileId =
+      selectedFileId === file.id
+        ? openTabs.filter((tab) => tab.id !== file.id)[0]?.id ?? ""
+        : selectedFileId;
+
+    setSelectedFileId(nextSelectedFileId);
+    utils.project.getAll.setData(undefined, (currentProjects) => {
+      if (!currentProjects) {
+        return currentProjects;
+      }
+
+      return currentProjects.map((project) => {
+        if (project.id !== selectedProject.id) {
+          return project;
+        }
+
+        const nextFiles = project.files.filter((projectFile) => {
+          const projectFilePath =
+            typeof projectFile === "string" ? projectFile : projectFile.path;
+          return projectFilePath !== file.path;
+        });
+        const nextOpenedFilePaths = (project.lastOpenedFilePaths ?? []).filter(
+          (filePath) => filePath !== file.path,
+        );
+        const nextFileGroups = project.fileGroups
+          ? Object.fromEntries(
+              Object.entries(project.fileGroups).filter(
+                ([filePath]) => filePath !== file.path,
+              ),
+            )
+          : undefined;
+
+        return {
+          ...project,
+          files: nextFiles,
+          fileGroups:
+            Object.keys(nextFileGroups ?? {}).length > 0
+              ? nextFileGroups
+              : undefined,
+          lastOpenedFilePaths:
+            nextOpenedFilePaths.length > 0 ? nextOpenedFilePaths : undefined,
+          activeFilePath:
+            project.activeFilePath === file.path
+              ? nextOpenedFilePaths[0]
+              : project.activeFilePath,
+        };
+      });
+    });
+
     try {
       await removeFile({
         projectId: selectedProject.id,
         filePath: file.path,
       });
     } catch (error) {
+      utils.project.getAll.setData(undefined, previousProjects);
+      setSelectedFileId(selectedFileId);
       console.error("Kon bestand niet verwijderen uit project", error);
       window.alert(
         error instanceof Error
