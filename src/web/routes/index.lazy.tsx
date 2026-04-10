@@ -710,7 +710,11 @@ function Index() {
     }
   };
 
-  const handleFileClick = async (
+  const handleFileSelect = (file: DisplayFile) => {
+    setSelectedFileId(file.id);
+  };
+
+  const handleFileOpen = async (
     file: DisplayFile,
     projectOverride?: Project,
   ) => {
@@ -718,16 +722,6 @@ function Index() {
     setSelectedFileId(file.id);
 
     if (!isAbsoluteFilePath(file.path)) {
-      if (targetProject?.id) {
-        try {
-          await activateFileTab({
-            projectId: targetProject.id,
-            filePath: file.path,
-          });
-        } catch (error) {
-          console.error("Kon tabstatus niet bijwerken", error);
-        }
-      }
       return;
     }
 
@@ -747,7 +741,7 @@ function Index() {
   };
 
   const handleQuickOpenSelect = async (file: DisplayFile) => {
-    await handleFileClick(file);
+    await handleFileOpen(file);
     setIsQuickOpenOpen(false);
     setQuickOpenQuery("");
   };
@@ -762,7 +756,7 @@ function Index() {
     }
 
     if (result.file) {
-      await handleFileClick(result.file, result.project);
+      await handleFileOpen(result.file, result.project);
     }
 
     setIsGlobalSearchOpen(false);
@@ -1207,7 +1201,10 @@ function Index() {
                                     <button
                                       type="button"
                                       className="file-row__button"
-                                      onClick={() => void handleFileClick(file)}
+                                      onClick={() => void handleFileSelect(file)}
+                                      onDoubleClick={() =>
+                                        void handleFileOpen(file)
+                                      }
                                       disabled={
                                         isOpeningFile ||
                                         isRemovingFile ||
@@ -1280,41 +1277,43 @@ function Index() {
                 </div>
 
                 <div className="details-panel">
-                  {openTabs.length > 0 && selectedFile ? (
+                  {selectedFile ? (
                     <>
-                      <div className="file-tabs">
-                        {openTabs.map((file) => {
-                          const isActive = file.id === selectedFile?.id;
+                      {openTabs.length > 0 ? (
+                        <div className="file-tabs">
+                          {openTabs.map((file) => {
+                            const isActive = file.id === selectedFile?.id;
 
-                          return (
-                            <div
-                              key={file.id}
-                              className={`file-tab ${isActive ? "active" : ""}`}
-                            >
-                              <button
-                                type="button"
-                                className="file-tab__button"
-                                onClick={() => void handleTabClick(file)}
+                            return (
+                              <div
+                                key={file.id}
+                                className={`file-tab ${isActive ? "active" : ""}`}
                               >
-                                <span className="file-tab__label">
-                                  {file.name}
-                                </span>
-                              </button>
-                              <button
-                                type="button"
-                                className="file-tab__close"
-                                onClick={(event) =>
-                                  void handleCloseTab(event, file)
-                                }
-                                aria-label={`Close ${file.name} tab`}
-                                disabled={isClosingTab}
-                              >
-                                x
-                              </button>
-                            </div>
-                          );
-                        })}
-                      </div>
+                                <button
+                                  type="button"
+                                  className="file-tab__button"
+                                  onClick={() => void handleTabClick(file)}
+                                >
+                                  <span className="file-tab__label">
+                                    {file.name}
+                                  </span>
+                                </button>
+                                <button
+                                  type="button"
+                                  className="file-tab__close"
+                                  onClick={(event) =>
+                                    void handleCloseTab(event, file)
+                                  }
+                                  aria-label={`Close ${file.name} tab`}
+                                  disabled={isClosingTab}
+                                >
+                                  x
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : null}
                       <div className="panel-heading">
                         <span className="eyebrow">Preview</span>
                         <h3>{selectedFile.name}</h3>
