@@ -740,6 +740,14 @@ function Index() {
     }
   };
 
+  const handleOpenFileButtonClick = async (
+    event: React.MouseEvent<HTMLButtonElement>,
+    file: DisplayFile,
+  ) => {
+    event.stopPropagation();
+    await handleFileOpen(file);
+  };
+
   const handleQuickOpenSelect = async (file: DisplayFile) => {
     await handleFileOpen(file);
     setIsQuickOpenOpen(false);
@@ -1243,6 +1251,20 @@ function Index() {
                                           </option>
                                         ))}
                                       </select>
+                                      <button
+                                        type="button"
+                                        className="file-row__action file-row__action--open"
+                                        onClick={(event) =>
+                                          void handleOpenFileButtonClick(
+                                            event,
+                                            file,
+                                          )
+                                        }
+                                        aria-label={`Open ${file.name}`}
+                                        disabled={isOpeningFile}
+                                      >
+                                        open
+                                      </button>
                                       <button
                                         type="button"
                                         className="file-row__action file-row__action--reveal"
