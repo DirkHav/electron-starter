@@ -199,6 +199,8 @@ function Index() {
   });
   const projectList = projects ?? [];
   const [isCreateModalOpen, setIsCreateModalOpen] = React.useState(false);
+  const [projectPendingClose, setProjectPendingClose] =
+    React.useState<Project | null>(null);
   const [projectPendingDelete, setProjectPendingDelete] =
     React.useState<Project | null>(null);
   const [newProjectName, setNewProjectName] = React.useState("");
@@ -740,6 +742,42 @@ function Index() {
     }
   };
 
+  const handleCloseProject = () => {
+    if (!selectedProject) {
+      return;
+    }
+
+    setProjectPendingClose(selectedProject);
+  };
+
+  const closeSelectedProject = () => {
+    setSelectedProjectId(null);
+    setSelectedFileId("");
+    setProjectPendingClose(null);
+  };
+
+  const handleConfirmCloseProject = async (shouldSave: boolean) => {
+    if (!projectPendingClose) {
+      return;
+    }
+
+    if (shouldSave) {
+      try {
+        await selectProject({ projectId: projectPendingClose.id });
+      } catch (error) {
+        console.error("Kon projectstatus niet opslaan voor sluiten", error);
+        window.alert(
+          error instanceof Error
+            ? error.message
+            : "Kon het project niet opslaan voor sluiten.",
+        );
+        return;
+      }
+    }
+
+    closeSelectedProject();
+  };
+
   const handleOpenFileButtonClick = async (
     event: React.MouseEvent<HTMLButtonElement>,
     file: DisplayFile,
@@ -1150,6 +1188,13 @@ function Index() {
                   </button>
                   <button
                     type="button"
+                    className="secondary-button project-action-button"
+                    onClick={handleCloseProject}
+                  >
+                    Close Project
+                  </button>
+                  <button
+                    type="button"
                     className="primary-button add-file-button"
                     onClick={handleAddFiles}
                     disabled={isAddingFiles}
@@ -1481,6 +1526,49 @@ function Index() {
                 disabled={isDeletingProject}
               >
                 {isDeletingProject ? "Deleting..." : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {projectPendingClose ? (
+        <div className="modal-overlay" role="presentation">
+          <div
+            className="modal-card"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="close-project-title"
+          >
+            <div className="panel-heading">
+              <span className="eyebrow">Close project</span>
+              <h2 id="close-project-title">
+                Do you want to save changes before closing?
+              </h2>
+              <p>{projectPendingClose.name} wordt gesloten in de interface.</p>
+            </div>
+
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setProjectPendingClose(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => void handleConfirmCloseProject(false)}
+              >
+                No
+              </button>
+              <button
+                type="button"
+                className="primary-button"
+                onClick={() => void handleConfirmCloseProject(true)}
+              >
+                Yes
               </button>
             </div>
           </div>
