@@ -6,6 +6,7 @@ import {
   formatTimestamp,
   getProjectFileGroup,
   type ProjectFile,
+  type StoredProjectFile,
   readProjectsFile,
   setLastSelectedProject,
   setProjectActiveFile,
@@ -23,6 +24,33 @@ import { isAbsolute } from "node:path";
 function getStoredFilePath(file: string | ProjectFile) {
   return typeof file === "string" ? file : file.path;
 }
+
+function cloneStoredProjectFile(file: StoredProjectFile, mode: "copy" | "cut") {
+  if (typeof file === "string") {
+    return file;
+  }
+
+  if (mode === "cut") {
+    return { ...file };
+  }
+
+  return {
+    ...file,
+    id: `${file.id}-copy-${Date.now()}`,
+  };
+}
+
+const projectFileSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  path: z.string().min(1),
+  type: z.string().min(1),
+  size: z.string().min(1),
+  updatedAt: z.string().min(1),
+  content: z.string(),
+});
+
+const storedProjectFileSchema = z.union([z.string().min(1), projectFileSchema]);
 
 function getNewProjectFilePaths(
   project: { files: Array<string | ProjectFile> },
@@ -493,6 +521,112 @@ export const projectRouter = router({
       return project;
     }),
 
+  pasteStoredFile: publicProcedure
+    .input(
+      z.object({
+        targetProjectId: z.string().min(1),
+        sourceProjectId: z.string().min(1).optional(),
+        file: storedProjectFileSchema,
+        action: z.enum(["copy", "cut"]),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      const data = await readProjectsFile();
+      const targetProject = data.projects.find(
+        (project) => project.id === input.targetProjectId,
+      );
+
+      if (!targetProject) {
+        throw new Error(`Project with id ${input.targetProjectId} not found`);
+      }
+
+      const sourceProject = input.sourceProjectId
+        ? data.projects.find((project) => project.id === input.sourceProjectId)
+        : undefined;
+
+      const storedFilePath = getStoredFilePath(input.file);
+      const targetAlreadyHasFile = targetProject.files.some(
+        (file) => getStoredFilePath(file) === storedFilePath,
+      );
+
+      if (
+        input.action === "cut" &&
+        sourceProject &&
+        sourceProject.id !== targetProject.id
+      ) {
+        sourceProject.files = sourceProject.files.filter(
+          (file) => getStoredFilePath(file) !== storedFilePath,
+        );
+        if (sourceProject.fileGroups?.[storedFilePath]) {
+          delete sourceProject.fileGroups[storedFilePath];
+        }
+        setProjectOpenedFiles(
+          sourceProject,
+          (sourceProject.lastOpenedFilePaths ?? []).filter(
+            (filePath) => filePath !== storedFilePath,
+          ),
+        );
+        if (sourceProject.activeFilePath === storedFilePath) {
+          setProjectActiveFile(
+            sourceProject,
+            sourceProject.lastOpenedFilePaths?.[0],
+          );
+        }
+      }
+
+      if (!targetAlreadyHasFile) {
+        const nextFile = cloneStoredProjectFile(input.file, input.action);
+        targetProject.files.push(nextFile);
+        setProjectFileGroup(targetProject, storedFilePath, "General");
+      }
+
+      await writeProjectsFile(data);
+      return targetProject;
+    }),
+
+  createFolder: publicProcedure
+    .input(
+      z.object({
+        projectId: z.string().min(1),
+        folderName: z.string().trim().min(1),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      const data = await readProjectsFile();
+      const project = data.projects.find(
+        (candidate) => candidate.id === input.projectId,
+      );
+
+      if (!project) {
+        throw new Error(`Project with id ${input.projectId} not found`);
+      }
+
+      const folderPath = `${project.location}/${input.folderName}`;
+      const alreadyExists = project.files.some(
+        (file) => getStoredFilePath(file) === folderPath,
+      );
+
+      if (alreadyExists) {
+        throw new Error("A file or folder with this name already exists.");
+      }
+
+      const newFolder: ProjectFile = {
+        id: `folder-${Date.now()}`,
+        name: input.folderName,
+        path: folderPath,
+        type: "Folder",
+        size: "-",
+        updatedAt: formatTimestamp(),
+        content: "",
+      };
+
+      project.files.push(newFolder);
+      setProjectFileGroup(project, folderPath, "General");
+      await writeProjectsFile(data);
+
+      return newFolder;
+    }),
+
   create: publicProcedure
     .input(
       z.object({
@@ -515,7 +649,7 @@ export const projectRouter = router({
         id: finalId,
         name: input.name,
         location: `C:/workspace/${finalId}`,
-        description: "Nieuw project, aangemaakt vanuit de sidebar.",
+        description: "",
         lastOpenedAt: formatTimestamp(),
         lastOpenedFilePaths: [],
         activeFilePath: undefined,

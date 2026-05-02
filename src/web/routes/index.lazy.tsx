@@ -16,6 +16,7 @@ type DisplayFile = {
   updatedAt: string;
   content: string;
   isLinkedFile: boolean;
+  isFolder: boolean;
 };
 
 type QuickOpenResult = {
@@ -29,6 +30,47 @@ type GlobalSearchResult = {
   score: number;
   label: string;
 };
+
+type OpenedFileItem = {
+  id: string;
+  name: string;
+  path: string;
+};
+
+type ClipboardState =
+  | {
+      action: "copy" | "cut";
+      itemType: "file";
+      sourceProjectId: string;
+      file: StoredProjectFile;
+      name: string;
+      path: string;
+    }
+  | {
+      action: "copy" | "cut";
+      itemType: "project";
+      project: Project;
+    };
+
+type ContextMenuState =
+  | {
+      type: "project";
+      x: number;
+      y: number;
+      project: Project;
+    }
+  | {
+      type: "file";
+      x: number;
+      y: number;
+      file: DisplayFile;
+    }
+  | {
+      type: "projectSpace";
+      x: number;
+      y: number;
+    }
+  | null;
 
 const DEFAULT_FILE_GROUP = "General";
 const FILE_GROUP_OPTIONS = ["General", "Data", "Reports", "Code"];
@@ -53,7 +95,12 @@ function clearPersistedRestoreUiState() {
 }
 
 function EmptyProjectState() {
-  return <div className="empty-state" />;
+  return (
+    <div className="empty-state">
+      <h2>Select a project</h2>
+      <p>Kies links een project om bestanden en details te bekijken.</p>
+    </div>
+  );
 }
 
 function LoadingProjectState() {
@@ -100,9 +147,9 @@ function normalizeFile(file: StoredProjectFile): DisplayFile {
       type: "Linked file",
       size: "-",
       updatedAt: "-",
-      content:
-        "Bestand is gekoppeld via absoluut pad. De inhoud is niet gekopieerd naar de app.",
+      content: "Linked file reference stored by absolute path.",
       isLinkedFile: true,
+      isFolder: false,
     };
   }
 
@@ -117,6 +164,7 @@ function normalizeFile(file: StoredProjectFile): DisplayFile {
     updatedAt: projectFile.updatedAt,
     content: projectFile.content,
     isLinkedFile: false,
+    isFolder: projectFile.type === "Folder",
   };
 }
 
@@ -188,9 +236,45 @@ function getFileGroup(project: Project | undefined, filePath: string) {
   return project?.fileGroups?.[filePath] || DEFAULT_FILE_GROUP;
 }
 
+function getStoredFileFromProject(project: Project | null, filePath: string) {
+  return (
+    project?.files.find((file) => {
+      if (typeof file === "string") {
+        return file === filePath;
+      }
+
+      return file.path === filePath;
+    }) ?? null
+  );
+}
+
 export const Route = createLazyFileRoute("/" as never)({
   component: Index,
 });
+
+function NoProjectsState({
+  onCreateProject,
+  isCreatingProject,
+}: {
+  onCreateProject: () => void;
+  isCreatingProject: boolean;
+}) {
+  return (
+    <div className="empty-state empty-state--welcome">
+      <span className="eyebrow">Project manager</span>
+      <h2>No projects yet</h2>
+      <p>Create your first project to start organizing files and folders.</p>
+      <button
+        type="button"
+        className="primary-button empty-state__action"
+        onClick={onCreateProject}
+        disabled={isCreatingProject}
+      >
+        Create your first project
+      </button>
+    </div>
+  );
+}
 
 function Index() {
   const utils = t.useUtils();
@@ -203,6 +287,9 @@ function Index() {
     React.useState<Project | null>(null);
   const [projectPendingDelete, setProjectPendingDelete] =
     React.useState<Project | null>(null);
+  const [openFiles, setOpenFiles] = React.useState<OpenedFileItem[]>([]);
+  const [clipboard, setClipboard] = React.useState<ClipboardState | null>(null);
+  const [contextMenu, setContextMenu] = React.useState<ContextMenuState>(null);
   const [newProjectName, setNewProjectName] = React.useState("");
   const [createError, setCreateError] = React.useState("");
   const [isDragOverFiles, setIsDragOverFiles] = React.useState(false);
@@ -220,6 +307,7 @@ function Index() {
   const hasRestoredWorkspaceRef = React.useRef(false);
   const quickOpenInputRef = React.useRef<HTMLInputElement | null>(null);
   const globalSearchInputRef = React.useRef<HTMLInputElement | null>(null);
+  const contextMenuRef = React.useRef<HTMLDivElement | null>(null);
 
   const { mutateAsync: createProject, isLoading: isCreatingProject } =
     t.project.create.useMutation({
@@ -227,6 +315,7 @@ function Index() {
         await utils.project.getAll.invalidate();
         setSelectedProjectId(newProject.id);
         setSelectedFileId("");
+        setOpenFiles([]);
         setIsCreateModalOpen(false);
         setNewProjectName("");
         setCreateError("");
@@ -258,6 +347,18 @@ function Index() {
     });
   const { mutateAsync: moveFileToGroup, isLoading: isMovingFileToGroup } =
     t.project.moveFileToGroup.useMutation({
+      onSuccess: async () => {
+        await utils.project.getAll.invalidate();
+      },
+    });
+  const { mutateAsync: pasteStoredFile, isLoading: isPastingFile } =
+    t.project.pasteStoredFile.useMutation({
+      onSuccess: async () => {
+        await utils.project.getAll.invalidate();
+      },
+    });
+  const { mutateAsync: createFolder, isLoading: isCreatingFolder } =
+    t.project.createFolder.useMutation({
       onSuccess: async () => {
         await utils.project.getAll.invalidate();
       },
@@ -451,6 +552,42 @@ function Index() {
     };
   }, []);
 
+  React.useEffect(() => {
+    if (!contextMenu) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (contextMenuRef.current?.contains(event.target as Node)) {
+        return;
+      }
+
+      setContextMenu(null);
+    };
+
+    const handleWindowChange = () => {
+      setContextMenu(null);
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setContextMenu(null);
+      }
+    };
+
+    window.addEventListener("mousedown", handlePointerDown);
+    window.addEventListener("scroll", handleWindowChange, true);
+    window.addEventListener("resize", handleWindowChange);
+    window.addEventListener("keydown", handleEscape);
+
+    return () => {
+      window.removeEventListener("mousedown", handlePointerDown);
+      window.removeEventListener("scroll", handleWindowChange, true);
+      window.removeEventListener("resize", handleWindowChange);
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [contextMenu]);
+
   const displayedFiles = (selectedProject?.files ?? []).map((file) =>
     normalizeFile(file),
   );
@@ -622,13 +759,54 @@ function Index() {
     }
   };
 
+  const closeContextMenu = () => {
+    setContextMenu(null);
+  };
+
   const handleSelectProject = async (projectId: string) => {
+    if (projectId !== selectedProjectId) {
+      setOpenFiles([]);
+    }
+
+    closeContextMenu();
     setSelectedProjectId(projectId);
 
     try {
       await selectProject({ projectId });
     } catch (error) {
       console.error("Kon projectrecency niet bijwerken", error);
+    }
+  };
+
+  const handleOpenSpecificProject = async (project: Project) => {
+    closeContextMenu();
+
+    if (project.id !== selectedProjectId) {
+      setOpenFiles([]);
+      setSelectedProjectId(project.id);
+
+      try {
+        await selectProject({ projectId: project.id });
+      } catch (error) {
+        console.error("Kon project niet selecteren", error);
+      }
+    }
+
+    try {
+      const result = await openProject({ projectId: project.id });
+
+      if (result.openedCount === 0) {
+        window.alert(
+          "Geen geldige absolute bestandspaden gevonden om te openen.",
+        );
+      }
+    } catch (error) {
+      console.error("Kon projectbestanden niet openen", error);
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : "Kon de projectbestanden niet openen.",
+      );
     }
   };
 
@@ -648,6 +826,7 @@ function Index() {
 
     try {
       await deleteProject({ id: deletedProjectId });
+      setOpenFiles([]);
       setSelectedProjectId(nextSelectedProjectId);
       if (!nextSelectedProjectId) {
         setSelectedFileId("");
@@ -694,22 +873,7 @@ function Index() {
       return;
     }
 
-    try {
-      const result = await openProject({ projectId: selectedProject.id });
-
-      if (result.openedCount === 0) {
-        window.alert(
-          "Geen geldige absolute bestandspaden gevonden om te openen.",
-        );
-      }
-    } catch (error) {
-      console.error("Kon projectbestanden niet openen", error);
-      window.alert(
-        error instanceof Error
-          ? error.message
-          : "Kon de projectbestanden niet openen.",
-      );
-    }
+    await handleOpenSpecificProject(selectedProject);
   };
 
   const handleFileSelect = (file: DisplayFile) => {
@@ -721,9 +885,10 @@ function Index() {
     projectOverride?: Project,
   ) => {
     const targetProject = projectOverride ?? selectedProject;
+    closeContextMenu();
     setSelectedFileId(file.id);
 
-    if (!isAbsoluteFilePath(file.path)) {
+    if (file.isFolder || !isAbsoluteFilePath(file.path)) {
       return;
     }
 
@@ -731,6 +896,20 @@ function Index() {
       await openFile({
         path: file.path,
         projectId: targetProject?.id,
+      });
+      setOpenFiles((currentFiles) => {
+        if (currentFiles.some((openFile) => openFile.path === file.path)) {
+          return currentFiles;
+        }
+
+        return [
+          ...currentFiles,
+          {
+            id: file.id,
+            name: file.name,
+            path: file.path,
+          },
+        ];
       });
     } catch (error) {
       console.error("Kon bestand niet openen", error);
@@ -747,35 +926,70 @@ function Index() {
       return;
     }
 
+    closeContextMenu();
     setProjectPendingClose(selectedProject);
   };
 
   const closeSelectedProject = () => {
     setSelectedProjectId(null);
     setSelectedFileId("");
+    setOpenFiles([]);
     setProjectPendingClose(null);
   };
 
-  const handleConfirmCloseProject = async (shouldSave: boolean) => {
+  const handleConfirmCloseProject = () => {
     if (!projectPendingClose) {
       return;
     }
 
-    if (shouldSave) {
-      try {
-        await selectProject({ projectId: projectPendingClose.id });
-      } catch (error) {
-        console.error("Kon projectstatus niet opslaan voor sluiten", error);
-        window.alert(
-          error instanceof Error
-            ? error.message
-            : "Kon het project niet opslaan voor sluiten.",
-        );
-        return;
-      }
+    closeSelectedProject();
+  };
+
+  const handleProjectContextMenu = (
+    event: React.MouseEvent<HTMLDivElement>,
+    project: Project,
+  ) => {
+    event.preventDefault();
+    setContextMenu({
+      type: "project",
+      x: event.clientX,
+      y: event.clientY,
+      project,
+    });
+  };
+
+  const handleFileContextMenu = (
+    event: React.MouseEvent<HTMLDivElement>,
+    file: DisplayFile,
+  ) => {
+    event.preventDefault();
+    setContextMenu({
+      type: "file",
+      x: event.clientX,
+      y: event.clientY,
+      file,
+    });
+  };
+
+  const handleProjectSpaceContextMenu = (
+    event: React.MouseEvent<HTMLDivElement>,
+  ) => {
+    const target = event.target as HTMLElement;
+
+    if (
+      target.closest(".file-row") ||
+      target.closest(".file-group__header") ||
+      target.closest(".file-row__actions")
+    ) {
+      return;
     }
 
-    closeSelectedProject();
+    event.preventDefault();
+    setContextMenu({
+      type: "projectSpace",
+      x: event.clientX,
+      y: event.clientY,
+    });
   };
 
   const handleOpenFileButtonClick = async (
@@ -793,6 +1007,10 @@ function Index() {
   };
 
   const handleGlobalSearchSelect = async (result: GlobalSearchResult) => {
+    if (result.project.id !== selectedProjectId) {
+      setOpenFiles([]);
+    }
+
     setSelectedProjectId(result.project.id);
 
     try {
@@ -807,6 +1025,86 @@ function Index() {
 
     setIsGlobalSearchOpen(false);
     setGlobalSearchQuery("");
+  };
+
+  const handleClipboardAction = (
+    action: "copy" | "cut",
+    file: DisplayFile,
+  ) => {
+    if (!selectedProject?.id) {
+      return;
+    }
+
+    const storedFile = getStoredFileFromProject(selectedProject, file.path);
+
+    if (!storedFile) {
+      return;
+    }
+
+    setClipboard({
+      action,
+      itemType: "file",
+      sourceProjectId: selectedProject.id,
+      file: typeof storedFile === "string" ? storedFile : { ...storedFile },
+      name: file.name,
+      path: file.path,
+    });
+    closeContextMenu();
+  };
+
+  const handlePasteClipboard = async () => {
+    if (!selectedProject?.id || !clipboard || clipboard.itemType !== "file") {
+      return;
+    }
+
+    closeContextMenu();
+
+    try {
+      await pasteStoredFile({
+        targetProjectId: selectedProject.id,
+        sourceProjectId: clipboard.sourceProjectId,
+        file: clipboard.file,
+        action: clipboard.action,
+      });
+
+      if (clipboard.action === "cut") {
+        setClipboard(null);
+      }
+    } catch (error) {
+      console.error("Kon klembordinhoud niet plakken", error);
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : "Kon de klembordinhoud niet plakken.",
+      );
+    }
+  };
+
+  const handleCreateFolder = async () => {
+    if (!selectedProject?.id) {
+      return;
+    }
+
+    closeContextMenu();
+
+    const folderName = window.prompt("Folder name");
+    const trimmedFolderName = folderName?.trim();
+
+    if (!trimmedFolderName) {
+      return;
+    }
+
+    try {
+      await createFolder({
+        projectId: selectedProject.id,
+        folderName: trimmedFolderName,
+      });
+    } catch (error) {
+      console.error("Kon map niet aanmaken", error);
+      window.alert(
+        error instanceof Error ? error.message : "Kon de map niet aanmaken.",
+      );
+    }
   };
 
   const handleTabClick = async (file: DisplayFile) => {
@@ -855,15 +1153,12 @@ function Index() {
     }
   };
 
-  const handleRemoveFile = async (
-    event: React.MouseEvent<HTMLButtonElement>,
-    file: DisplayFile,
-  ) => {
-    event.stopPropagation();
-
+  const removeFileFromProject = async (file: DisplayFile) => {
     if (!selectedProject?.id) {
       return;
     }
+
+    closeContextMenu();
 
     const shouldRemove = window.confirm(
       "Are you sure you want to remove this file from the project?",
@@ -938,6 +1233,14 @@ function Index() {
           : "Kon het bestand niet uit het project verwijderen.",
       );
     }
+  };
+
+  const handleRemoveFile = async (
+    event: React.MouseEvent<HTMLButtonElement>,
+    file: DisplayFile,
+  ) => {
+    event.stopPropagation();
+    await removeFileFromProject(file);
   };
 
   const handleRevealFile = async (
@@ -1101,127 +1404,176 @@ function Index() {
     }
   };
 
+  const canPasteClipboard =
+    Boolean(selectedProject?.id) &&
+    clipboard?.itemType === "file" &&
+    !isPastingFile;
+
   return (
     <>
-      <div className="project-browser">
-        <aside className="project-sidebar">
-          <div className="panel-heading">
-            <span className="eyebrow">Projects</span>
-            <div className="sidebar-heading">
-              <h1>Workspace</h1>
+      <div className="project-manager-shell">
+        <header className="workspace-toolbar">
+          <div className="workspace-toolbar__brand">
+            <span className="workspace-toolbar__logo">PM</span>
+            <div>
+              <span className="workspace-toolbar__title">Project Manager</span>
+              <span className="workspace-toolbar__subtitle">
+                Keep projects and files organized
+              </span>
+            </div>
+          </div>
+          <div className="workspace-toolbar__actions">
+            <button
+              type="button"
+              className="secondary-button workspace-toolbar__button"
+              onClick={() => setIsCreateModalOpen(true)}
+              disabled={isCreatingProject}
+            >
+              + New Project
+            </button>
+            {selectedProject ? (
               <button
                 type="button"
-                className="add-project-button"
-                onClick={() => setIsCreateModalOpen(true)}
-                disabled={isCreatingProject}
-                aria-label="Create new project"
+                className="primary-button workspace-toolbar__button"
+                onClick={handleAddFiles}
+                disabled={isAddingFiles}
               >
-                +
+                {isAddingFiles ? "Opening..." : "Add File"}
               </button>
-            </div>
-            <p>Kies een project om de bijbehorende bestanden te bekijken.</p>
+            ) : null}
           </div>
+        </header>
 
-          <div className="project-list">
-            {projectList.map((project) => {
-              const isActive = project.id === selectedProject?.id;
-
-              return (
-                <div
-                  key={project.id}
-                  className={`project-card ${isActive ? "active" : ""}`}
-                >
-                  <button
-                    type="button"
-                    className="project-card__button"
-                    onClick={() => void handleSelectProject(project.id)}
-                  >
-                    <span className="project-card__name">{project.name}</span>
-                    <span className="project-card__meta">
-                      {project.location}
+        {projectList.length === 0 && !isLoading ? (
+          <NoProjectsState
+            onCreateProject={() => setIsCreateModalOpen(true)}
+            isCreatingProject={isCreatingProject}
+          />
+        ) : (
+          <div className="project-browser">
+            <aside className="project-sidebar">
+              <div className="panel-heading">
+                <div className="panel-heading__title-row">
+                  <div className="panel-heading__title-group">
+                    <span className="eyebrow">Projects</span>
+                    <span className="info-tooltip">
+                      <button
+                        type="button"
+                        className="info-tooltip__trigger"
+                        aria-label="Project help"
+                      >
+                        ?
+                      </button>
+                      <span className="info-tooltip__content" role="tooltip">
+                        Select a project to view its files.
+                      </span>
                     </span>
-                    <span className="project-card__count">
-                      {(project.files ?? []).length} bestanden
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    className="project-card__delete"
-                    aria-label={`Delete ${project.name}`}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      setProjectPendingDelete(project);
-                    }}
-                    disabled={isDeletingProject}
-                  >
-                    x
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        </aside>
-
-        <section className="project-content">
-          {!selectedProjectId ? (
-            <EmptyProjectState />
-          ) : isLoading ? (
-            <LoadingProjectState />
-          ) : !selectedProject ? (
-            <ProjectNotFoundState />
-          ) : (
-            <>
-              <header className="project-header">
-                <div>
-                  <span className="eyebrow">Selected project</span>
-                  <h2>{selectedProject.name}</h2>
-                  <p>{selectedProject.description}</p>
-                </div>
-                <div>
-                  <button
-                    type="button"
-                    className="secondary-button project-action-button"
-                    onClick={() => void handleOpenProject()}
-                    disabled={isOpeningProject}
-                  >
-                    {isOpeningProject ? "Opening..." : "Open Project"}
-                  </button>
-                  <button
-                    type="button"
-                    className="secondary-button project-action-button"
-                    onClick={handleCloseProject}
-                  >
-                    Close Project
-                  </button>
-                  <button
-                    type="button"
-                    className="primary-button add-file-button"
-                    onClick={handleAddFiles}
-                    disabled={isAddingFiles}
-                  >
-                    {isAddingFiles ? "Opening..." : "Add File"}
-                  </button>
-                  <div className="project-badge">
-                    {selectedProject.location}
                   </div>
+                  <button
+                    type="button"
+                    className="add-project-button"
+                    onClick={() => setIsCreateModalOpen(true)}
+                    disabled={isCreatingProject}
+                    aria-label="Create new project"
+                  >
+                    +
+                  </button>
                 </div>
-              </header>
+              </div>
+
+              <div className="project-list">
+                {projectList.map((project) => {
+                  const isActive = project.id === selectedProject?.id;
+
+                  return (
+                    <div
+                      key={project.id}
+                      className={`project-card ${isActive ? "active" : ""}`}
+                      onContextMenu={(event) =>
+                        handleProjectContextMenu(event, project)
+                      }
+                    >
+                      <button
+                        type="button"
+                        className="project-card__button"
+                        onClick={() => void handleSelectProject(project.id)}
+                      >
+                        <span className="project-card__name">{project.name}</span>
+                        <span className="project-card__count">
+                          {(project.files ?? []).length} bestanden
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        className="project-card__delete"
+                        aria-label={`Delete ${project.name}`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setProjectPendingDelete(project);
+                        }}
+                        disabled={isDeletingProject}
+                      >
+                        x
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </aside>
+
+            <section className="project-content">
+              {!selectedProjectId ? (
+                <EmptyProjectState />
+              ) : isLoading ? (
+                <LoadingProjectState />
+              ) : !selectedProject ? (
+                <ProjectNotFoundState />
+              ) : (
+                <>
+                  <header className="project-header">
+                    <div>
+                      <span className="eyebrow">Selected project</span>
+                      <h2 className="project-header__title">
+                        {selectedProject.name}
+                      </h2>
+                      {selectedProject.description ? (
+                        <p>{selectedProject.description}</p>
+                      ) : null}
+                    </div>
+                    <div className="project-header__actions">
+                      <button
+                        type="button"
+                        className="secondary-button project-action-button"
+                        onClick={() => void handleOpenProject()}
+                        disabled={isOpeningProject}
+                      >
+                        {isOpeningProject ? "Opening..." : "Open Project"}
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary-button project-action-button"
+                        onClick={handleCloseProject}
+                      >
+                        Close Project
+                      </button>
+                    </div>
+                  </header>
 
               <div className="content-grid">
-                <div className="file-panel">
-                  <div className="panel-heading">
-                    <span className="eyebrow">Files</span>
-                    <h3>Bestandsoverzicht</h3>
-                  </div>
+                    <div className="file-panel">
+                      <div className="panel-heading">
+                        <span className="eyebrow">Files</span>
+                      </div>
 
-                  <div
-                    className={`file-list ${
-                      isDragOverFiles ? "drag-over" : ""
-                    }`}
-                    onDragOver={handleFileListDragOver}
-                    onDragLeave={handleFileListDragLeave}
-                    onDrop={(event) => void handleFileListDrop(event)}
-                  >
+                      <div
+                        className={`file-list ${
+                          isDragOverFiles ? "drag-over" : ""
+                        }`}
+                        onContextMenu={handleProjectSpaceContextMenu}
+                        onDragOver={handleFileListDragOver}
+                        onDragLeave={handleFileListDragLeave}
+                        onDrop={(event) => void handleFileListDrop(event)}
+                      >
                     {groupedFiles.map(({ groupName, files }) => {
                       const isCollapsed = Boolean(collapsedGroups[groupName]);
 
@@ -1250,6 +1602,9 @@ function Index() {
                                     className={`file-row ${
                                       isActive ? "active" : ""
                                     }`}
+                                    onContextMenu={(event) =>
+                                      handleFileContextMenu(event, file)
+                                    }
                                   >
                                     <button
                                       type="button"
@@ -1264,13 +1619,20 @@ function Index() {
                                         isRevealingFile ||
                                         isMovingFileToGroup
                                       }
-                                    >
-                                      <span className="file-row__content">
-                                        <span className="file-row__name">
-                                          {file.name}
-                                        </span>
-                                        <span className="file-row__meta">
-                                          {file.path} | {file.size}
+                                        >
+                                          <span className="file-row__content">
+                                            <span className="file-row__name-row">
+                                              <span className="file-row__name">
+                                                {file.name}
+                                              </span>
+                                              {file.isFolder ? (
+                                                <span className="file-row__kind">
+                                                  Folder
+                                                </span>
+                                              ) : null}
+                                            </span>
+                                            <span className="file-row__meta">
+                                              {file.type} | {file.size}
                                         </span>
                                       </span>
                                     </button>
@@ -1305,22 +1667,26 @@ function Index() {
                                             file,
                                           )
                                         }
-                                        aria-label={`Open ${file.name}`}
-                                        disabled={isOpeningFile}
-                                      >
-                                        open
-                                      </button>
+                                            aria-label={`Open ${file.name}`}
+                                            disabled={
+                                              isOpeningFile || file.isFolder
+                                            }
+                                          >
+                                            open
+                                          </button>
                                       <button
                                         type="button"
                                         className="file-row__action file-row__action--reveal"
                                         onClick={(event) =>
                                           void handleRevealFile(event, file)
                                         }
-                                        aria-label={`Reveal ${file.name} in folder`}
-                                        disabled={isRevealingFile}
-                                      >
-                                        dir
-                                      </button>
+                                            aria-label={`Reveal ${file.name} in folder`}
+                                            disabled={
+                                              isRevealingFile || file.isFolder
+                                            }
+                                          >
+                                            dir
+                                          </button>
                                       <button
                                         type="button"
                                         className="file-row__action file-row__action--remove"
@@ -1402,17 +1768,10 @@ function Index() {
                         </div>
                       </div>
 
-                      <pre className="file-preview">
-                        <code>{selectedFile.content}</code>
-                      </pre>
-                      {selectedFile.isLinkedFile ? (
-                        <p className="linked-file-note">
-                          Dit bestand is toegevoegd via de native file picker.
-                          In `projects.json` wordt alleen het absolute pad
-                          opgeslagen.
-                        </p>
-                      ) : null}
-                    </>
+                          <pre className="file-preview">
+                            <code>{selectedFile.content}</code>
+                          </pre>
+                        </>
                   ) : (
                     <div className="empty-state">
                       {selectedProject ? (
@@ -1426,9 +1785,105 @@ function Index() {
                 </div>
               </div>
             </>
-          )}
-        </section>
+              )}
+            </section>
+          </div>
+        )}
       </div>
+
+      {contextMenu ? (
+        <div
+          ref={contextMenuRef}
+          className="context-menu"
+          role="menu"
+          style={{
+            top: contextMenu.y,
+            left: contextMenu.x,
+          }}
+          onContextMenu={(event) => event.preventDefault()}
+        >
+          {contextMenu.type === "project" ? (
+            <>
+              <button
+                type="button"
+                className="context-menu__item"
+                onClick={() => void handleOpenSpecificProject(contextMenu.project)}
+              >
+                Open Project
+              </button>
+              <button
+                type="button"
+                className="context-menu__item"
+                onClick={() => {
+                  setProjectPendingDelete(contextMenu.project);
+                  closeContextMenu();
+                }}
+              >
+                Delete Project
+              </button>
+            </>
+          ) : contextMenu.type === "projectSpace" ? (
+            <>
+              <button
+                type="button"
+                className="context-menu__item"
+                onClick={() => void handlePasteClipboard()}
+                disabled={!canPasteClipboard}
+              >
+                Paste
+              </button>
+              <button
+                type="button"
+                className="context-menu__item"
+                onClick={() => void handleCreateFolder()}
+                disabled={isCreatingFolder}
+              >
+                New Folder
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                className="context-menu__item"
+                onClick={() => void handleFileOpen(contextMenu.file)}
+                disabled={contextMenu.file.isFolder}
+              >
+                Open
+              </button>
+              <button
+                type="button"
+                className="context-menu__item"
+                onClick={() => void removeFileFromProject(contextMenu.file)}
+              >
+                Delete
+              </button>
+              <button
+                type="button"
+                className="context-menu__item"
+                onClick={() => handleClipboardAction("copy", contextMenu.file)}
+              >
+                Copy
+              </button>
+              <button
+                type="button"
+                className="context-menu__item"
+                onClick={() => handleClipboardAction("cut", contextMenu.file)}
+              >
+                Cut
+              </button>
+              <button
+                type="button"
+                className="context-menu__item"
+                onClick={() => void handlePasteClipboard()}
+                disabled={!canPasteClipboard}
+              >
+                Paste
+              </button>
+            </>
+          )}
+        </div>
+      ) : null}
 
       {isCreateModalOpen ? (
         <div className="modal-overlay" role="presentation">
@@ -1543,9 +1998,21 @@ function Index() {
             <div className="panel-heading">
               <span className="eyebrow">Close project</span>
               <h2 id="close-project-title">
-                Do you want to save changes before closing?
+                Make sure you saved and closed all open files.
               </h2>
               <p>{projectPendingClose.name} wordt gesloten in de interface.</p>
+              {openFiles.length > 0 ? (
+                <p className="linked-file-note">
+                  Open files:
+                  <br />
+                  {openFiles.map((file) => (
+                    <React.Fragment key={file.path}>
+                      - {file.name}
+                      <br />
+                    </React.Fragment>
+                  ))}
+                </p>
+              ) : null}
             </div>
 
             <div className="modal-actions">
@@ -1558,17 +2025,10 @@ function Index() {
               </button>
               <button
                 type="button"
-                className="secondary-button"
-                onClick={() => void handleConfirmCloseProject(false)}
-              >
-                No
-              </button>
-              <button
-                type="button"
                 className="primary-button"
-                onClick={() => void handleConfirmCloseProject(true)}
+                onClick={handleConfirmCloseProject}
               >
-                Yes
+                Continue
               </button>
             </div>
           </div>
